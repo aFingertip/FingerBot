@@ -1,0 +1,95 @@
+services:
+  fingerbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fingerbot-app-webui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - PORT=8080
+    env_file:
+      - .env.docker
+    volumes:
+      # 日志文件挂载到宿主机
+      - ./logs:/app/logs
+      # 可选：配置文件挂载
+      - ./docker/config:/app/config:ro
+    networks:
+      - fingerbot-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # Redis用于缓存和会话存储（可选）
+  redis:
+    image: redis:7-alpine
+    container_name: fingerbot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./docker/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fingerbot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 日志管理服务（可选）
+  logrotate:
+    image: alpine:latest
+    container_name: fingerbot-logrotate
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./docker/logrotate.conf:/etc/logrotate.d/fingerbot:ro
+    command: |
+      sh -c "
+        apk add --no-cache logrotate
+        while true; do
+          logrotate -f /etc/logrotate.d/fingerbot
+          sleep 86400
+        done
+      "
+    networks:
+      - fingerbot-network
+
+networks:
+  fingerbot-network:
+    driver: bridge
+    name: fingerbot-network
+
+volumes:
+  redis-data:
+    name: fingerbot-redis-data

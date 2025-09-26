@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { ChatResponse, ChatTask, ToolCallInfo } from '../core/types';
@@ -8,8 +8,7 @@ import { ToolManager, ToolCall, ToolExecutionContext } from '../tools';
 
 export class GeminiClient {
   private keyManager: ApiKeyManager;
-  private currentGenAI!: GoogleGenerativeAI;
-  private currentModel: any;
+  private currentGenAI!: GoogleGenAI;
   private currentApiKey!: string;
   private toolManager: ToolManager;
 
@@ -25,9 +24,8 @@ export class GeminiClient {
 
   private initializeClient(): void {
     this.currentApiKey = this.keyManager.getCurrentApiKey();
-    this.currentGenAI = new GoogleGenerativeAI(this.currentApiKey);
-    this.currentModel = this.currentGenAI.getGenerativeModel({ model: config.gemini.model });
-    
+    this.currentGenAI = new GoogleGenAI({ apiKey: this.currentApiKey });
+
     logger.debug('🔧 Gemini客户端初始化', {
       model: config.gemini.model,
       apiKey: `${this.currentApiKey.substring(0, 10)}...`
@@ -37,11 +35,10 @@ export class GeminiClient {
   private switchApiKey(): void {
     const oldKey = this.currentApiKey;
     this.currentApiKey = this.keyManager.getCurrentApiKey();
-    
+
     if (oldKey !== this.currentApiKey) {
-      this.currentGenAI = new GoogleGenerativeAI(this.currentApiKey);
-      this.currentModel = this.currentGenAI.getGenerativeModel({ model: config.gemini.model });
-      
+      this.currentGenAI = new GoogleGenAI({ apiKey: this.currentApiKey });
+
       logger.info('🔄 Gemini API Key已切换', {
         from: `${oldKey.substring(0, 10)}...`,
         to: `${this.currentApiKey.substring(0, 10)}...`
@@ -60,9 +57,11 @@ export class GeminiClient {
         prompt: fullPrompt
       });
       
-      const result = await this.currentModel.generateContent(fullPrompt);
-      const response = await result.response;
-      const text = response.text();
+      const response = await this.currentGenAI.models.generateContent({
+        model: config.gemini.model,
+        contents: fullPrompt
+      });
+      const text = response.text || '';
 
       // 使用简化的解析方法
       const parsedResponse = await this.parseResponseWithRetry(text, fullPrompt, toolContext);
@@ -387,12 +386,16 @@ ${malformedResponse}
 只返回JSON数组，不要任何额外说明文字。`;
 
     try {
-      const result = await this.currentModel.generateContent(reformatPrompt);
-      const reformattedText = result.response.text();
+      const response = await this.currentGenAI.models.generateContent({
+        model: config.gemini.model,
+        contents: reformatPrompt
+      });
+      const reformattedText = response.text || '';
       
-      logger.debug('📝 重新格式化请求完成', {
+      logger.info('📝 重新格式化请求完成', {
         originalLength: malformedResponse.length,
-        reformattedLength: reformattedText.length
+        reformattedLength: reformattedText.length,
+        reformattedText: reformattedText,
       });
       
       return reformattedText;
@@ -400,7 +403,7 @@ ${malformedResponse}
       logger.warn('❌ 重新格式化请求失败', { 
         error: (error as any)?.message || String(error) 
       });
-      return malformedResponse; // 返回原始响应
+      // return malformedResponse; // 返回原始响应
     }
   }
 
@@ -416,9 +419,11 @@ ${malformedResponse}
   async testConnection(): Promise<boolean> {
     try {
       return await this.executeWithRetry(async () => {
-        const result = await this.currentModel.generateContent("Hello");
-        const response = await result.response;
-        response.text();
+        const response = await this.currentGenAI.models.generateContent({
+          model: config.gemini.model,
+          contents: "Hello"
+        });
+        const _ = response.text || '';
         
         logger.info('✅ Gemini连接测试成功', {
           apiKey: `${this.currentApiKey.substring(0, 10)}...`
@@ -460,8 +465,7 @@ ${malformedResponse}
     if (oldKey !== newKey) {
       // 重新初始化客户端使用新的key
       this.currentApiKey = newKey;
-      this.currentGenAI = new GoogleGenerativeAI(this.currentApiKey);
-      this.currentModel = this.currentGenAI.getGenerativeModel({ model: config.gemini.model });
+      this.currentGenAI = new GoogleGenAI({ apiKey: this.currentApiKey });
       
       logger.info('🔧 手动强制切换API Key完成', {
         from: `${oldKey.substring(0, 10)}...`,

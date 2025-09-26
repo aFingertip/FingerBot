@@ -89,6 +89,11 @@ npm run webui:dev  # WebUI dev server on port 3000
 - `src/core/qq-adapter.ts` - Converts QQ OneBot messages to internal format, handles CQ codes, whitelist filtering
 - `src/core/message-handler.ts` - Conversation memory management and message formatting utilities
 
+**Tool System (`src/tools/`)**
+- `src/tools/tool-manager.ts` - Manages and coordinates AI function calling tools
+- `src/tools/mention-tool.ts` - Handles @mentions and user interaction tools
+- `src/tools/index.ts` - Tool system exports and registration
+
 **Whitelist System (`src/utils/whitelist-manager.ts`)**
 - Singleton pattern group whitelist management
 - Environment variable configuration via `GROUP_WHITELIST` (comma-separated group IDs)
@@ -99,6 +104,12 @@ npm run webui:dev  # WebUI dev server on port 3000
 - `src/utils/logger.ts` - Custom logger with structured output and memory storage
 - `src/utils/log-store.ts` - In-memory log storage for WebUI access
 - Real-time log viewing with JSON formatting and expandable sections in WebUI
+
+**Stamina Management System (`src/utils/stamina-manager.ts`)**
+- Controls bot reply frequency based on stamina levels
+- Implements probability-based reply mechanisms
+- Configurable thresholds and regeneration rates
+- Integrates with queue processing for natural conversation flow
 
 ### Data Flow
 
@@ -283,24 +294,26 @@ tail -f logs/app-$(date +%Y-%m-%d).log
 - Node.js >= 20.19.0
 
 **Code Quality Checks**
-- 项目当前没有配置 ESLint 或 Prettier
-- 使用 TypeScript 进行类型检查：`npm run build:server` 
-- 如需添加 lint 命令，请先配置 ESLint 并更新此文档
+- Project currently has no ESLint or Prettier configuration
+- CRITICAL: Always run `npm run build:server` for TypeScript type checking after any changes
+- Use strict TypeScript - resolve type issues instead of suppressing them
+- If lint commands are needed, configure ESLint first and update this documentation
 
 **Environment Setup**
 Use template files for configuration:
+- `.env.example` - Main configuration template with all available options
 - `.env.docker` - Production Docker environment template
 - `.env.development` - Local development environment template
 
 Copy and customize the appropriate template:
 ```bash
-# For Docker deployment
-cp .env.docker .env.docker.local
-# Edit .env.docker.local with your values
+# Start with the example template
+cp .env.example .env.development.local  # For local development
+cp .env.example .env.docker.local       # For Docker deployment
 
-# For local development  
+# Or use specific templates
 cp .env.development .env.development.local
-# Edit .env.development.local with your values
+cp .env.docker .env.docker.local
 ```
 
 Required `.env` variables:
@@ -440,9 +453,26 @@ HOT_RELOAD=true                         # Enable hot reload (development)
 
 ## Development Notes
 
-**Code Quality Checks**: After completing any task, MUST run `npm run build:server` to ensure TypeScript compilation succeeds. The project currently lacks ESLint/Prettier - configure these tools if code linting is needed.
+**CRITICAL Code Quality Requirement**: After completing ANY task, you MUST run `npm run build:server` to ensure TypeScript compilation succeeds. This is non-negotiable - the build must pass.
 
-**Test Coverage**: Use Jest for testing with comprehensive coverage. Run `npm test` for unit tests, `npm run test:coverage` for coverage reports. Test files mirror the `src/` structure in `tests/` directory. The Jest configuration excludes `server.ts` from coverage reporting.
+**Coding Standards**: Follow the guidelines in `AGENTS.md`:
+- Use two-space indentation for TypeScript and Vue files
+- Strict TypeScript enforced - resolve type issues, don't suppress them
+- PascalCase for classes/components, camelCase for functions/variables
+- Descriptive filenames (e.g., `message-queue-manager.ts`)
+- Follow Conventional Commits format (e.g., `feat(queue): batch trigger tuning`)
+
+**Test Coverage**: Use Jest for testing with comprehensive coverage. Commands:
+- `npm test` - Run unit tests
+- `npm run test:watch` - Watch mode for test-driven development
+- `npm run test:coverage` - Generate coverage report (excludes server.ts)
+- Test files mirror the `src/` structure in `tests/` directory
+- Jest config in `jest.config.js` with ts-jest preset
+
+**Single Test Execution**: To run a single test file:
+```bash
+npm test -- path/to/specific.test.ts
+```
 
 **No Compatibility Principle**: When refactoring architecture, directly delete unused files and configurations without maintaining backward compatibility. Keep the codebase clean and focused on current implementation.
 
@@ -544,11 +574,12 @@ docker-compose restart               # Restart services
   - `src/ai/api-key-manager.ts` - Intelligent API key rotation and error handling
   - `src/core/task-queue.ts` - Asynchronous task processing system
   - `src/config/persona.ts` - Bot persona configuration
+  - `src/tools/` - AI function calling tools and coordination system
 - **Infrastructure**:
   - `src/core/ws-server.ts` - WebSocket server for NapCat connectivity
   - `src/core/qq-adapter.ts` - QQ message format conversion and filtering
   - `src/core/message-handler.ts` - Conversation memory management utilities
-  - `src/utils/` - Shared utilities (logger, config, whitelist)
+  - `src/utils/` - Shared utilities (logger, config, whitelist, stamina manager)
   - `webui/src/` - Vue 3 + TypeScript WebUI components
   - `tests/` - Jest unit tests mirroring src/ structure
   - `scripts/` - Docker deployment and development scripts
@@ -620,9 +651,10 @@ QUEUE_MAX_AGE_SECONDS=60    # Longer accumulation periods
 ## Additional Documentation
 
 This repository includes supplementary documentation files:
+- `AGENTS.md` - **IMPORTANT**: Repository guidelines, coding style, naming conventions, and commit guidelines
 - `WEBUI.md` - Detailed WebUI development and deployment guide
-- `DOCKER.md` - Comprehensive Docker setup and troubleshooting 
+- `DOCKER.md` - Comprehensive Docker setup and troubleshooting
 - `DEBUG.md` - Debugging guides and troubleshooting procedures
-- `QUEUE_MODE_USAGE.md` - **NEW**: Comprehensive queue mode configuration and usage guide
+- `QUEUE_MODE_USAGE.md` - Comprehensive queue mode configuration and usage guide
 
-Refer to these files for specific implementation details not covered in this overview.
+Refer to these files for specific implementation details not covered in this overview. **Always read AGENTS.md for coding standards.**

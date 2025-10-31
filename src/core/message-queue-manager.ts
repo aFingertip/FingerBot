@@ -1,11 +1,11 @@
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { staminaManager, StaminaStatus } from '../utils/stamina-manager';
-import { 
-  QueuedMessage, 
-  QueueConfig, 
-  FlushReason, 
-  QueueStatus, 
+import {
+  QueuedMessage,
+  QueueConfig,
+  FlushReason,
+  QueueStatus,
   QueueProcessResult,
   IMessageProcessor,
   QueueEventListener,
@@ -15,7 +15,7 @@ import { Message } from './types';
 
 /**
  * 智能消息队列管理器
- * 
+ *
  * 负责将消息进行队列化处理，通过混合触发策略决定何时处理队列中的消息批次。
  * 这样可以减少API调用次数，提供更好的上下文理解，优化系统性能。
  */
@@ -46,7 +46,7 @@ export class MessageQueueManager {
   ) {
     this.messageProcessor = messageProcessor;
     this.eventListener = eventListener;
-    
+
     // 合并默认配置
     this.queueConfig = {
       botName: config.botName || 'FingerBot',
@@ -204,20 +204,15 @@ export class MessageQueueManager {
   private isHighPriorityMessage(message: Message): boolean {
     const content = message.content.trim().toLowerCase();
     const botName = this.queueConfig.botName.toLowerCase();
-    
+
     // 检查条件：
     // 1. @机器人
     // 2. 包含机器人名称
-    // 3. 以问号结尾
-    // 4. 命令类型消息
+    // 3. 命令类型消息
     return (
       content.includes(`@${botName}`) ||
       content.includes(botName) ||
-      content.endsWith('?') ||
-      content.endsWith('？') ||
-      message.type === 'command' ||
-      content.includes('help') ||
-      content.includes('帮助')
+      message.type === 'command'
     );
   }
 
@@ -317,7 +312,7 @@ export class MessageQueueManager {
         stamina: staminaStatus,
         queueSize: queueState.messages.length
       });
-      
+
       // 体力不足时，根据情况决定是否保留队列
       if (staminaStatus.level === 'critical') {
         // 极低体力时清空队列，避免积压
@@ -328,7 +323,7 @@ export class MessageQueueManager {
           clearedCount: clearedMessages.length
         });
       }
-      
+
       return {
         processed: false,
         messageCount: queueState.messages.length,
@@ -488,6 +483,7 @@ export class MessageQueueManager {
     }
 
     const historyEntries = messages.map(msg => ({
+      messageId: msg.messageId,
       content: msg.content,
       senderName: msg.userName || `用户${msg.userId}`,
       senderId: msg.userId,
@@ -524,7 +520,7 @@ export class MessageQueueManager {
     if (messages.length === 0) {
       return 0;
     }
-    
+
     const oldest = messages[0].timestamp;
     const newest = messages[messages.length - 1].timestamp;
     return newest - oldest;
@@ -586,13 +582,13 @@ export class MessageQueueManager {
     const oldStatus = staminaManager.getStatus();
     staminaManager.setStamina(value);
     const newStatus = staminaManager.getStatus();
-    
+
     logger.info('🔧 手动调整体力值', {
       from: oldStatus.current,
       to: newStatus.current,
       percentage: newStatus.percentage
     });
-    
+
     return newStatus;
   }
 }

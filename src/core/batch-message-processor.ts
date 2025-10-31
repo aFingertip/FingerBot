@@ -8,7 +8,7 @@ import { ChatResponse } from './types';
 
 /**
  * 批量消息处理器
- * 
+ *
  * 实现 IMessageProcessor 接口，负责处理队列中的多条消息。
  * 相比单条消息处理，这里会将多条消息作为一个批次进行AI决策和回复生成。
  */
@@ -25,7 +25,7 @@ export class BatchMessageProcessor implements IMessageProcessor {
 
   /**
    * 处理批量消息
-   * 
+   *
    * @param messages 队列中的消息列表
    * @param context 格式化后的上下文字符串
    * @returns 处理结果
@@ -51,11 +51,11 @@ export class BatchMessageProcessor implements IMessageProcessor {
     // 2. 检查群聊功能状态（如果是群聊消息）
     const groupId = messages.find(m => m.groupId)?.groupId;
     if (groupId && !this.botStateManager.isGroupChatActive()) {
-      logger.info('🔴 群聊功能已关闭，跳过批量消息处理', { 
+      logger.info('🔴 群聊功能已关闭，跳过批量消息处理', {
         groupId,
-        messageCount: messages.length 
+        messageCount: messages.length
       });
-      
+
       return {
         content: '',
         timestamp: new Date(),
@@ -69,7 +69,7 @@ export class BatchMessageProcessor implements IMessageProcessor {
       // 构建增强的上下文，包含批次信息
       const conversationContext = this.getConversationContext(messages);
       const enhancedContext = this.buildBatchContext(messages, context, conversationContext);
-      
+
       // 构建工具执行上下文
       const latestMessage = messages[messages.length - 1];
       const toolContext = {
@@ -79,7 +79,7 @@ export class BatchMessageProcessor implements IMessageProcessor {
       };
 
       const response = await this.geminiClient.generateResponse(
-        this.extractMainContent(messages), 
+        this.extractMainContent(messages),
         enhancedContext,
         toolContext
       );
@@ -89,9 +89,9 @@ export class BatchMessageProcessor implements IMessageProcessor {
 
       if (replies.length > 0) {
         const aiMessage = this.messageHandler.createMessage(
-          config.botId || 'assistant', 
-          replies[0], 
-          latestMessage.groupId, 
+          config.botId || 'assistant',
+          replies[0],
+          latestMessage.groupId,
           'AI助手',
           latestMessage.groupId || latestMessage.userId
         );
@@ -117,7 +117,7 @@ export class BatchMessageProcessor implements IMessageProcessor {
         messageCount: messages.length,
         error: error instanceof Error ? error.message : String(error)
       });
-      
+
       // 重新抛出错误，让上层处理
       throw error;
     }
@@ -137,7 +137,7 @@ export class BatchMessageProcessor implements IMessageProcessor {
       // 设置正确的时间戳
       message.timestamp = new Date(queuedMessage.timestamp * 1000);
       message.id = queuedMessage.messageId;
-      
+
       this.messageHandler.addMessage(message);
     });
   }
@@ -160,15 +160,81 @@ export class BatchMessageProcessor implements IMessageProcessor {
     const queueMessages = this.safeParseJsonArray(queueContext);
     const recentHistory = this.safeParseJsonArray(conversationContext);
 
+    // 去重：保留队列消息，移除历史中已存在的重复消息
+    const { filteredHistory, removedCount } = this.deduplicateMessages(queueMessages, recentHistory);
+
+    if (removedCount > 0) {
+      logger.info(`🔍 上下文去重：从历史消息中移除了 ${removedCount} 条重复消息`, {
+        queueSize: queueMessages.length,
+        historySize: recentHistory.length,
+        filteredHistorySize: filteredHistory.length
+      });
+    }
+
     return JSON.stringify(
       {
         summary,
         queueMessages,
-        recentHistory
+        recentHistory: filteredHistory
       },
       null,
       2
     );
+  }
+
+  /**
+   * 去重消息：保留队列消息，移除历史对话中的重复消息
+   * @param queueMessages 队列消息数组
+   * @param recentHistory 历史消息数组
+   * @returns 去重后的历史消息和移除数量
+   */
+  private deduplicateMessages(
+    queueMessages: Array<any>,
+    recentHistory: Array<any>
+  ): { filteredHistory: Array<any>; removedCount: number } {
+    // 从队列消息中提取所有 messageId
+    const queueMessageIds = new Set<string>();
+
+    for (const queueMsg of queueMessages) {
+      // 安全地提取 messageId（兼容不同的数据格式）
+      const messageId = queueMsg?.messageId;
+      if (messageId && typeof messageId === 'string') {
+        queueMessageIds.add(messageId);
+      }
+    }
+
+    // 如果队列中没有任何 messageId，则无需去重
+    if (queueMessageIds.size === 0) {
+      logger.debug('📋 队列消息中没有 messageId，跳过去重');
+      return { filteredHistory: recentHistory, removedCount: 0 };
+    }
+
+    // 过滤历史消息，移除与队列重复的，保留队列消息
+    const filteredHistory: Array<any> = [];
+    let removedCount = 0;
+
+    for (const historyMsg of recentHistory) {
+      const messageId = historyMsg?.messageId;
+
+      // 如果历史消息没有 messageId 或者不在队列中，则保留
+      if (!messageId || typeof messageId !== 'string') {
+        filteredHistory.push(historyMsg);
+        continue;
+      }
+
+      if (queueMessageIds.has(messageId)) {
+        // 重复消息，从历史中移除，记录
+        removedCount++;
+        logger.debug(`🗑️  从历史中移除重复消息 - ID: ${messageId}`, {
+          content: historyMsg.content?.substring(0, 50) || '(无内容)'
+        });
+      } else {
+        // 非重复消息，保留
+        filteredHistory.push(historyMsg);
+      }
+    }
+
+    return { filteredHistory, removedCount };
   }
 
   private getConversationContext(messages: QueuedMessage[]): string {
@@ -223,7 +289,7 @@ export class BatchMessageProcessor implements IMessageProcessor {
     if (messages.length <= 1) {
       return 0;
     }
-    
+
     const timestamps = messages.map(m => m.timestamp);
     return Math.max(...timestamps) - Math.min(...timestamps);
   }

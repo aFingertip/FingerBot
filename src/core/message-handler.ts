@@ -5,6 +5,7 @@ import { config } from '../utils/config';
 type ConversationRole = 'user' | 'assistant';
 
 interface ConversationHistoryEntry {
+  messageId: string;
   content: string;
   senderName: string;
   senderId: string;
@@ -56,6 +57,7 @@ export class MessageHandler {
     const historyEntries: ConversationHistoryEntry[] = recentMessages
       .filter(msg => (excludeUserId ? msg.userId !== excludeUserId : true))
       .map(msg => ({
+        messageId: msg.id,
         content: msg.content,
         senderName: msg.userName || `用户${msg.userId}`,
         senderId: msg.userId,

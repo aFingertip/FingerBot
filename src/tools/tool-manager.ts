@@ -1,5 +1,7 @@
 import { Tool, ToolCall, ToolResult, ToolExecutionContext } from './types';
 import { MentionTool } from './mention-tool';
+import { ReplyTool } from './reply-tool';
+import { NoReplyTool } from './no-reply-tool';
 import { logger } from '../utils/logger';
 
 /**
@@ -9,7 +11,10 @@ export class ToolManager {
   private tools: Map<string, Tool> = new Map();
 
   constructor() {
-    this.registerTool(new MentionTool());
+    // 注册所有可用工具
+    this.registerTool(new ReplyTool());      // 回复消息工具
+    this.registerTool(new NoReplyTool());    // 不回复工具
+    this.registerTool(new MentionTool());    // @提及工具
   }
 
   /**

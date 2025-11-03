@@ -10,19 +10,19 @@ import { ChatResponse, ChatTask, ThinkingTask, ToolCallInfo } from './types';
 
 /**
  * 增强型QQ聊天代理服务器
- * 
+ *
  * 基于队列模式的统一实现，负责对接 NapCat WebSocket 并驱动异步批量回复。
  */
 export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
   private wsServer: WSServer;
   private readonly taskQueue: TaskQueue;
-  
+
   // 用于跟踪异步回复
   private pendingReplies: Map<string, {
     qqMessage: QQMessage;
     timestamp: number;
   }> = new Map();
-  
+
   // 清理过期的 pending replies (30分钟)
   private readonly PENDING_REPLY_TIMEOUT = 30 * 60 * 1000;
 
@@ -33,13 +33,13 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
       maxQueueSize: config.messageQueue.maxQueueSize,
       maxQueueAgeSeconds: config.messageQueue.maxQueueAgeSeconds
     });
-    
+
     this.wsServer = new WSServer();
     this.taskQueue = new TaskQueue();
     this.setupMessageHandling();
     this.setupQueueCallbacks();
     this.registerTaskHandlers();
-    
+
     logger.info(`🚀 EnhancedQQChatAgentServer 初始化完成`, {
       queueMode: 'queue',
       queueConfig: config.messageQueue
@@ -48,13 +48,13 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
 
   async initialize(): Promise<boolean> {
     logger.info('Initializing Enhanced QQ Chat Agent Server...');
-    
+
     // 初始化基础Agent
     const baseInitialized = await super.initialize();
     if (!baseInitialized) {
       return false;
     }
-    
+
     logger.info('Enhanced QQ Chat Agent Server initialized successfully');
     logger.info('🎯 Ready to accept NapCat connections on WebSocket /ws endpoint');
     return true;
@@ -83,19 +83,19 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
   private setupQueueCallbacks(): void {
     // 重写父类的队列事件监听器以支持回传
     const originalListener = this.createQueueEventListener();
-    
+
     // 创建增强的事件监听器
     const enhancedListener = {
       ...originalListener,
       onQueueFlushed: async (result: any) => {
         // 调用原始的日志记录
         originalListener.onQueueFlushed?.(result);
-        
+
         // 处理队列结果回传
         await this.handleQueueFlushResult(result);
       }
     };
-    
+
     // 更新队列管理器的事件监听器
     if (this.messageQueueManager) {
       (this.messageQueueManager as any).eventListener = enhancedListener;
@@ -133,7 +133,7 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
 
       logger.info('✅ 消息发送完成', {
         target,
-        message: message.length > 200 ? message.substring(0, 200) + '...' : message,
+        message: message,
         messageLength: message.length,
         qqMessageId: qqMessage?.message_id,
         taskId: task.id,
@@ -183,10 +183,10 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
 
     // 从批处理结果中提取消息ID（需要从BatchMessageProcessor传递）
     const messageIds = this.extractMessageIdsFromResult(result);
-    
+
     // 获取对应的pending replies
     const pendingReplies = this.getPendingRepliesForMessages(messageIds);
-    
+
     if (pendingReplies.length === 0) {
       logger.warn('📦 队列处理完成但找不到对应的待处理回复', {
         messageIds,
@@ -239,12 +239,12 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
         return ids;
       }
     }
-    
+
     // 备选：使用结果中的消息ID列表
     if (result.messageIds && Array.isArray(result.messageIds)) {
       return result.messageIds;
     }
-    
+
     // Fallback: 返回所有当前的pending reply keys
     // 这确保在没有明确关联时也能发送回复
     const allKeys = Array.from(this.pendingReplies.keys());
@@ -381,16 +381,16 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
   private async handleQQMessage(qqMessage: QQMessage): Promise<void> {
     // 记录消息信息
     QQMessageAdapter.logMessageInfo(qqMessage);
-    
+
     // 检查是否需要回复
     if (!QQMessageAdapter.shouldReply(qqMessage)) {
-      logger.info(`🚫 消息已忽略 (无需回复) - ID:${qqMessage.message_id}`);
+      // logger.info(`🚫 消息已忽略 (无需回复) - ID:${qqMessage.message_id}`);
       return;
     }
 
     // 转换为内部消息格式
     const message = QQMessageAdapter.fromQQMessage(qqMessage);
-    
+
     // 如果消息内容为空，跳过处理
     if (!message.content) {
       logger.warn(`⚠️  消息内容为空，跳过处理 - ID:${qqMessage.message_id}`);
@@ -404,7 +404,7 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
     try {
       // 将消息添加到待处理回复队列
       this.addToPendingReplies(message.id, qqMessage);
-      
+
       // 处理消息并获取AI回复
       const response = await this.processMessage(
         message.userId,
@@ -428,19 +428,19 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
       if (response.content) {
         // 格式化回复消息
         const replyText = QQMessageAdapter.formatReply(response, qqMessage);
-        
+
         // 发送回复
         await this.sendReply(qqMessage, replyText, message.id, response.toolCalls);
-        
+
         logger.info(`✅ 立即回复发送成功 - ID:${qqMessage.message_id} 长度:${replyText.length}字符 Token:${response.tokensUsed || 0}`);
       }
-      
+
     } catch (error) {
       logger.error(`❌ 消息处理失败 - ID:${qqMessage.message_id} 用户:${qqMessage.user_id}`, { 错误详情: error });
-      
+
       // 清理失败的pending reply
       this.removePendingReply(message.id);
-      
+
       // 向管理员发送错误详情
       await this.notifyAdminError(qqMessage, error);
     }
@@ -458,10 +458,10 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
       qqMessage,
       timestamp: Date.now()
     });
-    
+
     // 清理过期的pending replies
     this.cleanupExpiredPendingReplies();
-    
+
     logger.debug('📝 已添加到待处理队列', {
       messageId,
       queueSize: this.pendingReplies.size,
@@ -489,18 +489,18 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
   private cleanupExpiredPendingReplies(): void {
     const now = Date.now();
     const expiredKeys: string[] = [];
-    
+
     for (const [messageId, entry] of this.pendingReplies.entries()) {
       if (now - entry.timestamp > this.PENDING_REPLY_TIMEOUT) {
         expiredKeys.push(messageId);
       }
     }
-    
+
     for (const key of expiredKeys) {
       this.pendingReplies.delete(key);
       logger.warn(`⏰ 清理过期的待处理回复 - ID:${key}`);
     }
-    
+
     if (expiredKeys.length > 0) {
       logger.info(`🧹 清理了 ${expiredKeys.length} 个过期的待处理回复`);
     }
@@ -511,7 +511,7 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
    */
   private getPendingRepliesForMessages(messageIds: string[]): Array<{messageId: string, qqMessage: QQMessage}> {
     const results: Array<{messageId: string, qqMessage: QQMessage}> = [];
-    
+
     for (const messageId of messageIds) {
       const entry = this.pendingReplies.get(messageId);
       if (entry) {
@@ -521,13 +521,13 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
         });
       }
     }
-    
+
     return results;
   }
 
   private async sendReply(qqMessage: QQMessage, replyText: string, pendingMessageId: string, toolCalls?: ToolCallInfo[]): Promise<void> {
     const isGroup = qqMessage.message_type === 'group';
-    
+
     // 从工具调用中提取@用户信息
     let atUser: number | undefined;
     if (toolCalls && isGroup) {
@@ -571,11 +571,11 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
     // 如果是 GoogleGenerativeAI 错误，提取更多信息
     if (error.message && error.message.includes('GoogleGenerativeAI Error')) {
       let errorInfo = error.message;
-      
+
       // 如果有 cause 属性，添加原因信息
       if (error.cause) {
         errorInfo += `\n原因: ${error.cause.message || error.cause}`;
-        
+
         // 如果是网络错误，添加更多详情
         if (error.cause.code) {
           errorInfo += `\n错误代码: ${error.cause.code}`;
@@ -587,7 +587,7 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
           errorInfo += `\n系统调用: ${error.cause.syscall}`;
         }
       }
-      
+
       return errorInfo;
     }
 
@@ -611,13 +611,13 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
 
   private async notifyAdminError(qqMessage: QQMessage, error: any): Promise<void> {
     const adminUserId = parseInt(process.env.ADMIN_USER_ID || '2945791077');
-    
+
     // 构建错误详情消息
     const userDisplayName = qqMessage.sender?.nickname || `用户${qqMessage.user_id}`;
     const messageType = qqMessage.message_type === 'group' ? '群聊' : '私聊';
     const groupInfo = qqMessage.group_id ? `群${qqMessage.group_id}` : '';
     const messagePreview = qqMessage.raw_message?.substring(0, 50) + (qqMessage.raw_message?.length > 50 ? '...' : '');
-    
+
     const errorMessage = `🚨 消息处理错误报告\n\n` +
       `📅 时间: ${new Date().toLocaleString('zh-CN')}\n` +
       `👤 用户: ${userDisplayName}(${qqMessage.user_id})\n` +
@@ -627,7 +627,7 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
       '⚙️  处理模式: 队列模式\n\n' +
       `❌ 错误信息:\n${this.formatErrorMessage(error)}\n\n` +
       `🔍 错误详情:\n${error?.stack || '无堆栈信息'}`;
-    
+
     try {
       const success = await this.wsServer.sendPrivateMessage(adminUserId, errorMessage);
       if (success) {
@@ -643,7 +643,7 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
   // 获取连接状态
   getConnectionStatus(): { websocket: boolean; ai: boolean; connections: any } {
     const connectionInfo = this.wsServer.getConnectionInfo();
-    
+
     return {
       websocket: this.wsServer.isConnected(),
       ai: true, // 假设AI连接正常，实际可以添加更详细的检查
@@ -677,15 +677,15 @@ export class EnhancedQQChatAgentServer extends EnhancedChatAgent {
   // 优雅关闭
   async shutdown(): Promise<void> {
     logger.info('Shutting down Enhanced QQ Chat Agent Server...');
-    
+
     try {
       await this.taskQueue.shutdown();
       await this.wsServer.close();
       await super.shutdown();
-      
+
       // 清理待处理的回复
       this.pendingReplies.clear();
-      
+
       logger.info('Enhanced QQ Chat Agent Server shutdown complete');
     } catch (error) {
       logger.error('Error during Enhanced QQ Chat Agent Server shutdown', error);

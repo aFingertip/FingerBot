@@ -367,13 +367,27 @@ export class MessageQueueManager {
       const context = this.formatMessagesContext(messagesToProcess);
       const response = await this.messageProcessor.processMessages(messagesToProcess, context);
 
-      // 成功处理消息后消耗体力
-      const staminaConsumed = staminaManager.consumeStamina();
+      // 成功处理消息后消耗体力（传递消息数量作为强度）
+      const staminaConsumed = staminaManager.consumeStamina(messageCount);
       if (staminaConsumed) {
-        logger.debug('⚡ 消息处理完成，体力已消耗', {
+        const status = staminaManager.getStatus();
+        const levelEmoji = status.level === 'high' ? '💚' :
+                          status.level === 'medium' ? '💛' :
+                          status.level === 'low' ? '🧡' : '❤️';
+
+        logger.info(`⚡ 回复完成，体力已消耗`, {
           contextId,
           messageCount,
-          staminaStatus: staminaManager.getStatus()
+          consumed: messageCount,
+          stamina: {
+            current: `${status.current}/${status.max}`,
+            percentage: `${status.percentage}%`,
+            level: `${levelEmoji} ${status.level.toUpperCase()}`,
+            momentum: status.momentum,
+            canReply: status.canReply ? '✅ 可继续回复' : '⛔ 体力不足',
+            isRecovering: status.isRecovering ? '🔄 恢复中' : '⏸️ 静止',
+            restMode: status.restMode ? '😴 休息' : '😊 活跃'
+          }
         });
       }
 

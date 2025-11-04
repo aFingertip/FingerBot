@@ -350,10 +350,11 @@ ADMIN_USER_ID=2945791077
 # BOT_QQ_ID=123456789
 
 # Stamina Management Configuration ⭐
+# 基于惯性疲劳模型的体力管理系统，控制机器人回复频率
 STAMINA_MAX_STAMINA=100                   # 最大体力值 (default: 100)
-STAMINA_REPLY_COST=10                     # 每次回复消耗体力 (default: 10)
-STAMINA_REGEN_RATE=5                      # 体力恢复速率/分钟 (default: 5)
-STAMINA_REGEN_INTERVAL=60000              # 体力恢复间隔毫秒 (default: 60000 = 1分钟)
+STAMINA_REPLY_COST=5                      # 每批消息平均消耗（参考值，实际使用惯性模型，default: 5）
+STAMINA_REGEN_RATE=0.33                   # 体力恢复速率（点/秒），0.33点/秒 = 20点/分钟 (default: 0.33)
+STAMINA_REGEN_INTERVAL=1000               # 体力更新间隔（毫秒），更新越频繁体力变化越平滑 (default: 1000 = 1秒)
 STAMINA_LOW_THRESHOLD=30                  # 低体力阈值，低于此值降低回复频率 (default: 30)
 STAMINA_CRITICAL_THRESHOLD=10             # 极低体力阈值，低于此值几乎不回复 (default: 10)
 STAMINA_REST_MODE=false                   # 休息模式，暂停体力消耗 (default: false)

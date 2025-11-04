@@ -504,7 +504,7 @@ export class EnhancedChatAgent {
         let content = `🔋 体力状态详情：\n`;
         content += `💪 当前体力：${status.current}/${status.max} (${status.percentage}%)\n`;
         content += `📊 体力水平：${this.getStaminaLevelEmoji(status.level)} ${status.level.toUpperCase()}\n`;
-        content += `🎯 回复概率：${Math.round(staminaStats.replyProbability * 100)}%\n`;
+        content += `🎯 回复状态：${status.canReply ? '✅ 可回复' : '⛔ 体力不足'}\n`;
         content += `${status.restMode ? '😴 休息模式：开启' : '😊 休息模式：关闭'}\n`;
         
         if (status.nextRegenTime) {

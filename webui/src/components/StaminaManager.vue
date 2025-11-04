@@ -33,10 +33,10 @@
               </div>
               <div class="stamina-percentage">{{ staminaData.status.percentage }}%</div>
             </div>
-            
+
             <div class="stamina-bar">
-              <div 
-                class="stamina-fill" 
+              <div
+                class="stamina-fill"
                 :class="getBarClass(staminaData.status.level)"
                 :style="{ width: `${staminaData.status.percentage}%` }"
               ></div>
@@ -49,9 +49,30 @@
               <span class="indicator-icon">{{ staminaData.status.canReply ? '✅' : '❌' }}</span>
               <span>可回复状态</span>
             </div>
+            <div class="indicator" :class="{ active: staminaData.status.isRecovering }">
+              <span class="indicator-icon">{{ staminaData.status.isRecovering ? '🔄' : '⏸️' }}</span>
+              <span>{{ staminaData.status.isRecovering ? '正在恢复' : '恢复暂停' }}</span>
+            </div>
             <div class="indicator" :class="{ active: staminaData.status.restMode }">
               <span class="indicator-icon">{{ staminaData.status.restMode ? '😴' : '😊' }}</span>
               <span>{{ staminaData.status.restMode ? '休息模式' : '工作模式' }}</span>
+            </div>
+          </div>
+
+          <!-- 惯性疲劳显示 -->
+          <div class="momentum-section" v-if="staminaData.status.momentum > 0.1">
+            <div class="momentum-header">
+              <span class="momentum-label">⚡ 惯性疲劳值</span>
+              <span class="momentum-value">{{ staminaData.status.momentum }} ({{ staminaData.status.momentumPercentage }}%)</span>
+            </div>
+            <div class="momentum-bar">
+              <div
+                class="momentum-fill"
+                :style="{ width: `${Math.min(100, staminaData.status.momentumPercentage)}%` }"
+              ></div>
+            </div>
+            <div class="momentum-description">
+              💡 惯性疲劳会抑制体力恢复，停止活动后会逐渐衰减
             </div>
           </div>
         </div>
@@ -60,11 +81,15 @@
         <div class="stamina-stats">
           <div class="stat-row">
             <div class="stat-item">
-              <span class="stat-label">🎯 回复概率</span>
-              <span class="stat-value">{{ Math.round(staminaData.stats.replyProbability * 100) }}%</span>
+              <span class="stat-label">🔄 净恢复速率</span>
+              <span class="stat-value">{{ staminaData.stats.netRecoveryRate }}/秒</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">⚡ 惯性疲劳</span>
+              <span class="stat-value">{{ staminaData.stats.momentum }}</span>
             </div>
             <div class="stat-item" v-if="staminaData.status.nextRegenTime">
-              <span class="stat-label">⏱️ 下次恢复</span>
+              <span class="stat-label">⏱️ 下次更新</span>
               <span class="stat-value">{{ getTimeUntilRegen(staminaData.status.nextRegenTime) }}</span>
             </div>
           </div>
@@ -85,16 +110,16 @@
           <div class="control-section">
             <h4>快速操作</h4>
             <div class="control-buttons">
-              <button 
-                @click="toggleRestMode" 
+              <button
+                @click="toggleRestMode"
                 :disabled="loading"
                 :class="['btn-control', staminaData.status.restMode ? 'btn-warning' : 'btn-success']"
               >
                 {{ staminaData.status.restMode ? '😊 退出休息' : '😴 启用休息' }}
               </button>
-              
-              <button 
-                @click="showSetStaminaModal = true" 
+
+              <button
+                @click="showSetStaminaModal = true"
                 :disabled="loading"
                 class="btn-control btn-primary"
               >
@@ -106,10 +131,10 @@
           <div class="control-section">
             <h4>预设体力值</h4>
             <div class="preset-buttons">
-              <button 
-                v-for="preset in presetValues" 
+              <button
+                v-for="preset in presetValues"
                 :key="preset.value"
-                @click="setStamina(preset.value)" 
+                @click="setStamina(preset.value)"
                 :disabled="loading"
                 class="btn-preset"
               >
@@ -131,22 +156,22 @@
         <div class="modal-body">
           <div class="input-group">
             <label for="stamina-input">体力值 (0-100)</label>
-            <input 
+            <input
               id="stamina-input"
-              v-model.number="customStaminaValue" 
-              type="number" 
-              min="0" 
-              max="100" 
+              v-model.number="customStaminaValue"
+              type="number"
+              min="0"
+              max="100"
               step="1"
               placeholder="请输入体力值"
             />
           </div>
           <div class="range-input">
-            <input 
+            <input
               v-model.number="customStaminaValue"
-              type="range" 
-              min="0" 
-              max="100" 
+              type="range"
+              min="0"
+              max="100"
               step="1"
               class="stamina-slider"
             />
@@ -154,8 +179,8 @@
         </div>
         <div class="modal-footer">
           <button @click="showSetStaminaModal = false" class="btn-cancel">取消</button>
-          <button 
-            @click="setCustomStamina" 
+          <button
+            @click="setCustomStamina"
             :disabled="loading || customStaminaValue < 0 || customStaminaValue > 100"
             class="btn-confirm"
           >
@@ -173,9 +198,12 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 interface StaminaStatus {
   current: number
   max: number
+  momentum: number
   percentage: number
+  momentumPercentage: number
   level: 'high' | 'medium' | 'low' | 'critical'
   canReply: boolean
+  isRecovering: boolean
   restMode: boolean
   nextRegenTime?: string
 }
@@ -184,7 +212,8 @@ interface StaminaStats {
   status: StaminaStatus
   timeSinceLastReply: number
   estimatedFullRegenTime: number
-  replyProbability: number
+  momentum: number
+  netRecoveryRate: number
 }
 
 interface StaminaResponse {
@@ -214,7 +243,7 @@ const presetValues = [
 const getLevelIcon = (level: string) => {
   const icons = {
     high: '💚',
-    medium: '💛', 
+    medium: '💛',
     low: '🧡',
     critical: '❤️'
   }
@@ -225,7 +254,7 @@ const getLevelText = (level: string) => {
   const texts = {
     high: '充沛',
     medium: '良好',
-    low: '偏低', 
+    low: '偏低',
     critical: '极低'
   }
   return texts[level as keyof typeof texts] || '未知'
@@ -238,7 +267,7 @@ const getBarClass = (level: string) => {
 const formatTimeSince = (milliseconds: number) => {
   const minutes = Math.floor(milliseconds / 60000)
   const hours = Math.floor(minutes / 60)
-  
+
   if (hours > 0) {
     return `${hours}小时${minutes % 60}分钟前`
   }
@@ -248,7 +277,7 @@ const formatTimeSince = (milliseconds: number) => {
 const formatDuration = (milliseconds: number) => {
   const minutes = Math.ceil(milliseconds / 60000)
   const hours = Math.floor(minutes / 60)
-  
+
   if (hours > 0) {
     return `约${hours}小时${minutes % 60}分钟`
   }
@@ -259,16 +288,16 @@ const getTimeUntilRegen = (nextRegenTime: string) => {
   const now = Date.now()
   const target = new Date(nextRegenTime).getTime()
   const diff = Math.max(0, target - now)
-  
+
   if (diff === 0) {
     return '即将恢复'
   }
-  
+
   const seconds = Math.ceil(diff / 1000)
   if (seconds < 60) {
     return `${seconds}秒后`
   }
-  
+
   const minutes = Math.ceil(seconds / 60)
   return `${minutes}分钟后`
 }
@@ -278,7 +307,7 @@ const fetchStaminaStatus = async () => {
     error.value = ''
     const response = await fetch('/api/stamina/status')
     const data: StaminaResponse = await response.json()
-    
+
     if (data.success && data.status && data.stats) {
       staminaData.value = {
         status: data.status,
@@ -311,9 +340,9 @@ const setStamina = async (value: number) => {
       },
       body: JSON.stringify({ value })
     })
-    
+
     const data: StaminaResponse = await response.json()
-    
+
     if (data.success && data.status) {
       staminaData.value = {
         ...staminaData.value!,
@@ -336,7 +365,7 @@ const setCustomStamina = async () => {
 
 const toggleRestMode = async () => {
   if (!staminaData.value) return
-  
+
   loading.value = true
   try {
     const newMode = !staminaData.value.status.restMode
@@ -347,9 +376,9 @@ const toggleRestMode = async () => {
       },
       body: JSON.stringify({ enabled: newMode })
     })
-    
+
     const data: StaminaResponse = await response.json()
-    
+
     if (data.success && data.status) {
       staminaData.value = {
         ...staminaData.value!,
@@ -558,6 +587,7 @@ onUnmounted(() => {
   display: flex;
   gap: 24px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .indicator {
@@ -569,6 +599,9 @@ onUnmounted(() => {
   border-radius: 8px;
   border: 2px solid transparent;
   transition: all 0.2s;
+  flex: 1;
+  min-width: 140px;
+  justify-content: center;
 }
 
 .indicator.active {
@@ -578,6 +611,54 @@ onUnmounted(() => {
 
 .indicator-icon {
   font-size: 1.2rem;
+}
+
+/* 惯性疲劳部分样式 */
+.momentum-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea15, #764ba215);
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.momentum-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.momentum-label {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.momentum-value {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.momentum-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.momentum-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.momentum-description {
+  font-size: 0.85rem;
+  color: #666;
+  font-style: italic;
 }
 
 .stamina-stats {
@@ -845,17 +926,17 @@ onUnmounted(() => {
   .control-buttons, .preset-buttons {
     flex-direction: column;
   }
-  
+
   .btn-control {
     flex: none;
     min-width: 0;
   }
-  
+
   .stat-row {
     flex-direction: column;
     gap: 16px;
   }
-  
+
   .modal {
     margin: 16px;
     min-width: 0;

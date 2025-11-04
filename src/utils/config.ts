@@ -56,9 +56,9 @@ export const config = {
 
   stamina: {
     maxStamina: parseInt(process.env.STAMINA_MAX_STAMINA || '100'),
-    replyStaminaCost: parseInt(process.env.STAMINA_REPLY_COST || '10'),
-    regenRate: parseInt(process.env.STAMINA_REGEN_RATE || '5'),
-    regenInterval: parseInt(process.env.STAMINA_REGEN_INTERVAL || '60000'),
+    replyStaminaCost: parseInt(process.env.STAMINA_REPLY_COST || '5'),
+    regenRate: parseFloat(process.env.STAMINA_REGEN_RATE || '0.33'),  // 0.33点/秒 = 20点/分钟
+    regenInterval: parseInt(process.env.STAMINA_REGEN_INTERVAL || '1000'),  // 1秒更新一次
     lowStaminaThreshold: parseInt(process.env.STAMINA_LOW_THRESHOLD || '30'),
     criticalStaminaThreshold: parseInt(process.env.STAMINA_CRITICAL_THRESHOLD || '10'),
     restMode: process.env.STAMINA_REST_MODE?.toLowerCase() === 'true'
